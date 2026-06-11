@@ -8,10 +8,11 @@
   },
   "scripts": {
     "dev": "next dev",
-    "build": "opennextjs-cloudflare build",
+    "build": "next build",
     "start": "next start",
     "preview": "opennextjs-cloudflare build && wrangler dev",
     "deploy": "opennextjs-cloudflare build && wrangler deploy",
+    "cf-build": "opennextjs-cloudflare build",
     "lint": "eslint .",
     "lint:fix": "next lint --fix",
     "package-version": "npx npm-check-updates"
