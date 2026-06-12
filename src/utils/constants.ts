@@ -43,8 +43,9 @@ export const PRODUCT_OFFER_TYPE = "AggregateOffer";
 export const BAGISTO_SESSION = process.env.BAGISTO_SESSION ?? "bagisto_session";
 export const TOKEN = "token";
 export const BASE_URL = process.env.NEXTAUTH_URL;
-export const baseUrl = process.env.NEXT_PUBLIC_BAGISTO_ENDPOINT;
-export const GRAPHQL_URL = `${(process.env.NEXT_PUBLIC_BAGISTO_ENDPOINT || '').replace(/\/$/, '')}${BAGISTO_GRAPHQL_API_ENDPOINT}`;
+export const baseUrl =
+  process.env.BAGISTO_ENDPOINT || process.env.NEXT_PUBLIC_BAGISTO_ENDPOINT || "";
+export const GRAPHQL_URL = `${baseUrl.replace(/\/$/, "")}${BAGISTO_GRAPHQL_API_ENDPOINT}`;
 
 // Server-only: Use non-public env var, fallback to public for backwards compatibility
 export const STOREFRONT_KEY = process.env.BAGISTO_STOREFRONT_KEY || process.env.NEXT_PUBLIC_BAGISTO_STOREFRONT_KEY || "";
