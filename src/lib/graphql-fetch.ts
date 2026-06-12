@@ -1,14 +1,7 @@
 import { unstable_cache } from "next/cache";
 import { print, type DocumentNode } from "graphql";
-import {
-  type ApolloQueryResult,
-  type OperationVariables,
-} from "@apollo/client";
-import makeClient from "./apollo-client";
-
-
-
-
+import { type OperationVariables } from "@apollo/client";
+import { GRAPHQL_URL, STOREFRONT_KEY } from "@/utils/constants";
 
 export type CacheLifePreset =
   | "seconds"
@@ -44,8 +37,6 @@ export function getRevalidateTime(
   }
 }
 
-
-
 const queryPrintMemo = new WeakMap<DocumentNode, string>();
 
 export function stableStringify(value: unknown): string {
@@ -66,9 +57,6 @@ export function stableStringify(value: unknown): string {
     .join(",")}}`;
 }
 
-
-
-
 export interface GraphQLRequestOptions {
   tags?: string[];
   life?: CacheLifeOption;
@@ -81,6 +69,45 @@ export interface GraphQLRequestOptions {
   | "cache-only";
 }
 
+async function executeServerGraphQLRequest<
+  TData = unknown,
+  TVariables extends OperationVariables = OperationVariables
+>(
+  query: DocumentNode,
+  variables?: TVariables,
+  options?: GraphQLRequestOptions,
+): Promise<TData> {
+  const queryString = print(query);
+  const response = await fetch(GRAPHQL_URL, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "X-STOREFRONT-KEY": STOREFRONT_KEY,
+    },
+    body: JSON.stringify({
+      query: queryString,
+      ...(variables && { variables }),
+    }),
+    cache: options?.noCache ? "no-store" : "force-cache",
+    next: {
+      revalidate: options?.noCache ? 0 : getRevalidateTime(options?.life),
+      ...(options?.tags && { tags: options.tags }),
+    },
+  });
+
+  const result = await response.json();
+
+  if (!response.ok) {
+    throw new Error(result?.message || `GraphQL request failed with status ${response.status}`);
+  }
+
+  if (result?.errors?.length) {
+    throw new Error(result.errors[0]?.message || "GraphQL request failed");
+  }
+
+  return result.data as TData;
+}
+
 export async function graphqlRequest<
   TData = unknown,
   TVariables extends OperationVariables = OperationVariables
@@ -89,17 +116,8 @@ export async function graphqlRequest<
   variables?: TVariables,
   options?: GraphQLRequestOptions
 ): Promise<TData> {
-  if (options?.noCache) {
-    const client = makeClient();
-    const result: ApolloQueryResult<TData> =
-      await client.query({
-        query,
-        variables,
-        context: options?.context,
-        fetchPolicy: options?.fetchPolicy ?? "no-cache",
-      });
-
-    return result.data;
+  if (typeof window !== "undefined") {
+    throw new Error("graphqlRequest is server-only. Use Apollo client in browser components.");
   }
 
   if (options?.context) {
@@ -118,6 +136,10 @@ export async function graphqlRequest<
     queryPrintMemo.set(query, queryString);
   }
 
+  if (options?.noCache) {
+    return executeServerGraphQLRequest<TData, TVariables>(query, variables, options);
+  }
+
   const cacheKey = `graphql:${stableStringify({
     query: queryString,
     variables,
@@ -127,15 +149,10 @@ export async function graphqlRequest<
 
   const cachedQuery = unstable_cache(
     async (): Promise<TData> => {
-      const client = makeClient();
-      const result: ApolloQueryResult<TData> =
-        await client.query({
-          query,
-          variables,
-          fetchPolicy: "network-only",
-        });
-
-      return result.data;
+      return executeServerGraphQLRequest<TData, TVariables>(query, variables, {
+        ...options,
+        noCache: false,
+      });
     },
     [cacheKey],
     {
@@ -146,8 +163,6 @@ export async function graphqlRequest<
 
   return cachedQuery();
 }
-
-
 
 export async function graphqlRequestNoCache<
   TData = unknown,
